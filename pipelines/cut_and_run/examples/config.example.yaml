@@ -1,0 +1,14 @@
+project_name: example_cut_and_run_project
+genome: hg38
+
+paths:
+  raw_fastq_dir: /path/to/raw_fastq
+  output_dir: /path/to/output
+  reference_index: /path/to/bowtie2/index
+  chrom_sizes: /path/to/chrom.sizes
+  blacklist_bed: /path/to/blacklist.bed
+
+parameters:
+  threads: 8
+  paired_end: true
+  peak_caller: macs3

@@ -1,0 +1,3 @@
+sample_id,condition,mark,replicate,fastq_r1,fastq_r2
+WT_H3K4me3_rep1,WT,H3K4me3,1,/path/to/WT_H3K4me3_rep1_R1.fastq.gz,/path/to/WT_H3K4me3_rep1_R2.fastq.gz
+KO_H3K4me3_rep1,KO,H3K4me3,1,/path/to/KO_H3K4me3_rep1_R1.fastq.gz,/path/to/KO_H3K4me3_rep1_R2.fastq.gz
