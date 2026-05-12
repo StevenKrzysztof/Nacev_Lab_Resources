@@ -1,14 +1,34 @@
-project_name: example_cut_and_run_project
-genome: hg38
+project:
+  project_id: cut_and_run_project
+  project_dir: /path/to/project
+  output_dir: /path/to/project/results/cut_and_run
 
-paths:
-  raw_fastq_dir: /path/to/raw_fastq
-  output_dir: /path/to/output
-  reference_index: /path/to/bowtie2/index
-  chrom_sizes: /path/to/chrom.sizes
-  blacklist_bed: /path/to/blacklist.bed
+inputs:
+  sample_sheet: /path/to/project/metadata/cut_and_run_sample_sheet.csv
+
+reference:
+  organism: organism_placeholder
+  genome_build: genome_build_placeholder
+  genome_fasta: /path/to/reference/genome.fa
+  aligner_index: /path/to/reference/aligner_index
+  chromosome_sizes: /path/to/reference/chrom.sizes
+  blacklist_bed: /path/to/reference/blacklist.bed
 
 parameters:
+  assay_type: cut_and_run
   threads: 8
+  memory: 32G
   paired_end: true
-  peak_caller: macs3
+  minimum_mapping_quality: 30
+  remove_duplicates: true
+  normalization_method: reads_per_genomic_content
+  peak_caller: peak_caller_placeholder
+
+quality_control:
+  run_fastq_qc: true
+  run_alignment_qc: true
+  make_fragment_size_plots: true
+  make_genome_browser_tracks: true
+
+notes:
+  data_policy: Do not store raw data, private identifiers, or project-specific results in this template repository.

@@ -1,14 +1,40 @@
-project_name: example_bulk_rna_seq_project
-genome: hg38
+project:
+  project_id: bulk_rna_seq_project
+  project_dir: /path/to/project
+  output_dir: /path/to/project/results/bulk_rna_seq
 
-paths:
-  raw_fastq_dir: /path/to/raw_fastq
-  output_dir: /path/to/output
-  salmon_index: /path/to/salmon_index
-  gtf_file: /path/to/annotation.gtf
+inputs:
+  sample_sheet: /path/to/project/metadata/bulk_rna_seq_sample_sheet.csv
+
+reference:
+  organism: organism_placeholder
+  genome_build: genome_build_placeholder
+  transcriptome_index: /path/to/reference/transcriptome_index
+  genome_fasta: /path/to/reference/genome.fa
+  annotation_gtf: /path/to/reference/annotation.gtf
 
 parameters:
   threads: 8
+  memory: 32G
   paired_end: true
+  strandedness: auto
   quantification_method: salmon
-  differential_expression_method: DESeq2
+  differential_expression_method: deseq2
+  design_formula: "~ condition"
+  minimum_gene_count: 10
+  adjusted_p_value_threshold: 0.05
+  log2_fold_change_threshold: 1.0
+
+contrasts:
+  - contrast_id: condition_b_vs_condition_a
+    numerator_condition: condition_b
+    denominator_condition: condition_a
+
+quality_control:
+  run_fastq_qc: true
+  make_sample_pca: true
+  make_sample_distance_heatmap: true
+  make_count_summary: true
+
+notes:
+  data_policy: Do not store raw data, private identifiers, or project-specific results in this template repository.
