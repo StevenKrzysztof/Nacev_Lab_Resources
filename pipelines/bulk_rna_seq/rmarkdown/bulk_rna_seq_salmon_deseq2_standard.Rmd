@@ -1,0 +1,645 @@
+---
+title: "Bulk RNA-seq Salmon + DESeq2 Standard Analysis"
+author: "Nacev Lab"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+---
+
+# Overview
+
+This R Markdown template is the Nacev Lab standard downstream analysis for gene-level bulk RNA-seq.
+
+The standard input is Salmon `quant.sf` output, imported with `tximport`, followed by DESeq2 differential expression analysis. This template uses fake example sample names and placeholder paths. Before running it on a real project, replace the settings and sample metadata in the setup sections below.
+
+This template is Salmon-based, not STAR-count-based. STAR or featureCounts outputs may be useful for special projects, but routine gene-level bulk RNA-seq should start from Salmon quantification results.
+
+# 1. Setup
+
+```{r setup, message=FALSE, warning=FALSE}
+# ---- User edits required -----------------------------------------------------
+# Replace these placeholders with paths from the project workspace.
+# Do not point to this template repository for raw data or project results.
+
+project_dir <- "/path/to/project"
+salmon_dir <- file.path(project_dir, "salmon")
+outdir <- file.path(project_dir, "results", "bulk_rna_seq_deseq2")
+gtf_path <- "/path/to/reference/gencode.annotation.gtf"
+
+# Current lab standards:
+#   human: hg38
+#   mouse: mm10
+organism <- "human"      # Change to "mouse" for mouse projects.
+genome_build <- "hg38"   # Use "mm10" for mouse projects.
+
+# Edit this formula to match the approved experimental design.
+# Examples:
+#   ~ condition
+#   ~ batch + condition
+#   ~ genotype + treatment
+design_formula <- ~ condition
+
+# Differential expression thresholds used for result summaries and plots.
+alpha <- 0.05
+lfc_threshold <- 1
+min_count <- 10
+min_samples_per_group <- 2
+
+dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(outdir, "tables"), showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(outdir, "plots"), showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(outdir, "objects"), showWarnings = FALSE, recursive = TRUE)
+```
+
+```{r libraries, message=FALSE, warning=FALSE}
+suppressPackageStartupMessages({
+  library(tximport)
+  library(readr)
+  library(DESeq2)
+  library(ggplot2)
+  library(pheatmap)
+  library(rtracklayer)
+  library(clusterProfiler)
+  library(msigdbr)
+  library(enrichplot)
+  library(AnnotationDbi)
+  library(matrixStats)
+})
+
+if (organism == "human") {
+  suppressPackageStartupMessages(library(org.Hs.eg.db))
+  OrgDb <- org.Hs.eg.db
+  msig_species <- "Homo sapiens"
+  kegg_organism <- "hsa"
+} else if (organism == "mouse") {
+  suppressPackageStartupMessages(library(org.Mm.eg.db))
+  OrgDb <- org.Mm.eg.db
+  msig_species <- "Mus musculus"
+  kegg_organism <- "mmu"
+} else {
+  stop("Set organism to either 'human' or 'mouse'.")
+}
+```
+
+```{r helper-functions}
+save_plot <- function(plot_obj, filename, width = 8, height = 6) {
+  ggsave(file.path(outdir, "plots", filename), plot_obj, width = width, height = height)
+}
+
+clean_ensembl <- function(x) {
+  sub("\\..*", "", x)
+}
+
+map_gene_symbols <- function(ensembl_ids) {
+  clean_ids <- clean_ensembl(ensembl_ids)
+  mapped <- AnnotationDbi::select(
+    OrgDb,
+    keys = unique(clean_ids),
+    keytype = "ENSEMBL",
+    columns = c("SYMBOL", "ENTREZID")
+  )
+  mapped <- mapped[!duplicated(mapped$ENSEMBL), ]
+  data.frame(
+    gene_id = ensembl_ids,
+    ensembl = clean_ids,
+    symbol = mapped$SYMBOL[match(clean_ids, mapped$ENSEMBL)],
+    entrez = mapped$ENTREZID[match(clean_ids, mapped$ENSEMBL)],
+    stringsAsFactors = FALSE
+  )
+}
+
+result_to_table <- function(res_obj) {
+  df <- as.data.frame(res_obj)
+  df$gene_id <- rownames(df)
+  symbols <- map_gene_symbols(df$gene_id)
+  df$ensembl <- symbols$ensembl[match(df$gene_id, symbols$gene_id)]
+  df$symbol <- symbols$symbol[match(df$gene_id, symbols$gene_id)]
+  df$entrez <- symbols$entrez[match(df$gene_id, symbols$gene_id)]
+  df$direction <- ifelse(
+    is.na(df$padj) | df$padj >= alpha | abs(df$log2FoldChange) < lfc_threshold,
+    "not_significant",
+    ifelse(df$log2FoldChange > 0, "up", "down")
+  )
+  df[order(df$padj), c(
+    "gene_id", "ensembl", "symbol", "entrez", "baseMean", "log2FoldChange",
+    "lfcSE", "stat", "pvalue", "padj", "direction"
+  )]
+}
+```
+
+# 2. Sample Metadata
+
+Replace this fake example table with a project-specific metadata file. The `sample_id` values should match the Salmon output folders, and each folder should contain `quant.sf`.
+
+```{r sample-metadata}
+# Option A, recommended for real projects:
+# sample_table <- read.csv(file.path(project_dir, "metadata", "sample_sheet.csv"))
+
+# Option B, fake teaching example:
+sample_table <- data.frame(
+  sample_id = c(
+    "celllineA_control_rep1",
+    "celllineA_control_rep2",
+    "celllineA_control_rep3",
+    "celllineA_treated_rep1",
+    "celllineA_treated_rep2",
+    "celllineA_treated_rep3"
+  ),
+  condition = factor(
+    c("control", "control", "control", "treated", "treated", "treated"),
+    levels = c("control", "treated")
+  ),
+  replicate = c("rep1", "rep2", "rep3", "rep1", "rep2", "rep3"),
+  stringsAsFactors = FALSE
+)
+
+sample_table$files <- file.path(salmon_dir, sample_table$sample_id, "quant.sf")
+rownames(sample_table) <- sample_table$sample_id
+
+# Check that the files exist before continuing.
+missing_files <- sample_table$files[!file.exists(sample_table$files)]
+if (length(missing_files) > 0) {
+  stop(
+    "Missing Salmon quant.sf files:\n",
+    paste(missing_files, collapse = "\n"),
+    "\n\nEdit salmon_dir or sample_table before running the analysis."
+  )
+}
+
+sample_table
+```
+
+```{r contrasts}
+# Define planned comparisons before looking at results.
+# Direction matters: numerator vs denominator means treated / control here.
+contrast_table <- data.frame(
+  contrast_id = "treated_vs_control",
+  variable = "condition",
+  numerator = "treated",
+  denominator = "control",
+  stringsAsFactors = FALSE
+)
+
+contrast_table
+```
+
+# 3. Import Salmon Results With tximport
+
+This section follows the Salmon import strategy used in the previous Salmon-based reference notebook. The GTF must match the Salmon transcriptome index.
+
+```{r tx2gene}
+gtf <- rtracklayer::import(gtf_path)
+
+tx2gene <- data.frame(
+  tx_id = mcols(gtf)$transcript_id,
+  gene_id = mcols(gtf)$gene_id,
+  stringsAsFactors = FALSE
+)
+tx2gene <- unique(na.omit(tx2gene))
+
+head(tx2gene)
+```
+
+```{r tximport}
+files <- sample_table$files
+names(files) <- sample_table$sample_id
+
+txi <- tximport(
+  files,
+  type = "salmon",
+  tx2gene = tx2gene,
+  ignoreAfterBar = TRUE
+)
+
+head(txi$counts)
+```
+
+# 4. Create DESeq2 Object
+
+```{r deseq-object}
+dds <- DESeqDataSetFromTximport(
+  txi = txi,
+  colData = sample_table,
+  design = design_formula
+)
+
+dds
+```
+
+# 5. Filter Low-Count Genes
+
+This default filter keeps genes with at least `r min_count` counts in at least `r min_samples_per_group` samples. For complex designs, review whether a group-aware filter is more appropriate.
+
+```{r filtering}
+raw_counts <- counts(dds)
+
+keep <- rowSums(raw_counts >= min_count) >= min_samples_per_group
+dds <- dds[keep, ]
+
+cat("Genes before filtering:", nrow(raw_counts), "\n")
+cat("Genes after filtering:", nrow(dds), "\n")
+```
+
+# 6. Run DESeq2
+
+```{r run-deseq}
+dds <- DESeq(dds)
+
+saveRDS(dds, file.path(outdir, "objects", "deseq2_object.rds"))
+```
+
+# 7. Export Differential Expression Results
+
+```{r results}
+all_results <- list()
+all_result_tables <- list()
+all_sig_genes <- character()
+
+for (i in seq_len(nrow(contrast_table))) {
+  contrast_id <- contrast_table$contrast_id[i]
+  variable <- contrast_table$variable[i]
+  numerator <- contrast_table$numerator[i]
+  denominator <- contrast_table$denominator[i]
+
+  res <- results(
+    dds,
+    contrast = c(variable, numerator, denominator),
+    alpha = alpha
+  )
+
+  all_results[[contrast_id]] <- res
+  res_table <- result_to_table(res)
+  all_result_tables[[contrast_id]] <- res_table
+
+  sig_table <- res_table[
+    !is.na(res_table$padj) &
+      res_table$padj < alpha &
+      abs(res_table$log2FoldChange) >= lfc_threshold,
+  ]
+
+  all_sig_genes <- union(all_sig_genes, sig_table$gene_id)
+
+  write.csv(
+    res_table,
+    file.path(outdir, "tables", paste0("DESeq2_", contrast_id, "_all_genes.csv")),
+    row.names = FALSE
+  )
+  write.csv(
+    sig_table,
+    file.path(outdir, "tables", paste0("DESeq2_", contrast_id, "_significant_genes.csv")),
+    row.names = FALSE
+  )
+
+  cat("\n", contrast_id, "\n", sep = "")
+  print(summary(res))
+  cat("Significant genes:", nrow(sig_table), "\n")
+}
+```
+
+# 8. Variance-Stabilized Expression
+
+```{r vst}
+vst_data <- vst(dds, blind = TRUE)
+vst_matrix <- assay(vst_data)
+
+saveRDS(vst_data, file.path(outdir, "objects", "vst_object.rds"))
+write.csv(vst_matrix, file.path(outdir, "tables", "vst_expression_matrix.csv"))
+```
+
+# 9. PCA
+
+```{r pca}
+pca_data <- plotPCA(vst_data, intgroup = "condition", returnData = TRUE)
+percent_var <- round(100 * attr(pca_data, "percentVar"))
+
+p_pca <- ggplot(pca_data, aes(x = PC1, y = PC2, color = condition, label = name)) +
+  geom_point(size = 4) +
+  geom_text(vjust = -0.8, size = 3, show.legend = FALSE) +
+  theme_minimal(base_size = 12) +
+  labs(
+    title = "PCA of bulk RNA-seq samples",
+    x = paste0("PC1: ", percent_var[1], "% variance"),
+    y = paste0("PC2: ", percent_var[2], "% variance")
+  )
+
+print(p_pca)
+save_plot(p_pca, "PCA_PC1_PC2.pdf", width = 8, height = 6)
+```
+
+# 10. Sample Distance Heatmap
+
+```{r sample-distance}
+sample_dist <- dist(t(vst_matrix))
+sample_dist_mat <- as.matrix(sample_dist)
+rownames(sample_dist_mat) <- sample_table$sample_id
+colnames(sample_dist_mat) <- sample_table$sample_id
+
+annotation_col <- as.data.frame(colData(dds)[, c("condition"), drop = FALSE])
+
+pdf(file.path(outdir, "plots", "Sample_distance_heatmap.pdf"), width = 8, height = 7)
+pheatmap(
+  sample_dist_mat,
+  clustering_distance_rows = sample_dist,
+  clustering_distance_cols = sample_dist,
+  annotation_col = annotation_col,
+  main = "Sample-to-sample distances"
+)
+dev.off()
+
+pheatmap(
+  sample_dist_mat,
+  clustering_distance_rows = sample_dist,
+  clustering_distance_cols = sample_dist,
+  annotation_col = annotation_col,
+  main = "Sample-to-sample distances"
+)
+```
+
+# 11. Volcano Plots
+
+```{r volcano}
+plot_volcano <- function(res_table, contrast_id, annotate_top_n = 10) {
+  plot_df <- res_table
+  plot_df$neg_log10_padj <- -log10(plot_df$padj)
+  plot_df$significance <- "not_significant"
+  plot_df$significance[
+    !is.na(plot_df$padj) &
+      plot_df$padj < alpha &
+      plot_df$log2FoldChange >= lfc_threshold
+  ] <- "up"
+  plot_df$significance[
+    !is.na(plot_df$padj) &
+      plot_df$padj < alpha &
+      plot_df$log2FoldChange <= -lfc_threshold
+  ] <- "down"
+
+  label_df <- plot_df[
+    plot_df$significance != "not_significant" & !is.na(plot_df$symbol),
+  ]
+  label_df <- head(label_df[order(label_df$padj), ], annotate_top_n)
+
+  p <- ggplot(plot_df, aes(x = log2FoldChange, y = neg_log10_padj, color = significance)) +
+    geom_point(alpha = 0.6, size = 1.4, na.rm = TRUE) +
+    geom_vline(xintercept = c(-lfc_threshold, lfc_threshold), linetype = "dashed") +
+    geom_hline(yintercept = -log10(alpha), linetype = "dashed") +
+    geom_text(
+      data = label_df,
+      aes(label = symbol),
+      color = "black",
+      size = 3,
+      vjust = -0.6,
+      check_overlap = TRUE
+    ) +
+    scale_color_manual(values = c(
+      "not_significant" = "grey70",
+      "up" = "#D55E00",
+      "down" = "#0072B2"
+    )) +
+    theme_minimal(base_size = 12) +
+    labs(
+      title = paste("Volcano plot:", contrast_id),
+      x = "log2 fold change",
+      y = "-log10 adjusted p-value",
+      color = ""
+    )
+
+  print(p)
+  save_plot(p, paste0("Volcano_", contrast_id, ".pdf"), width = 8, height = 7)
+}
+
+for (contrast_id in names(all_result_tables)) {
+  plot_volcano(all_result_tables[[contrast_id]], contrast_id)
+}
+```
+
+# 12. Gene Expression Boxplots
+
+Use this section to inspect individual genes of interest across groups. Replace `genes_to_plot` with project-relevant gene symbols after confirming they are present in the dataset.
+
+```{r gene-boxplots}
+genes_to_plot <- c("GENE1", "GENE2")
+
+symbol_map <- map_gene_symbols(rownames(vst_matrix))
+plot_expr <- data.frame(
+  gene_id = rep(rownames(vst_matrix), ncol(vst_matrix)),
+  sample_id = rep(colnames(vst_matrix), each = nrow(vst_matrix)),
+  vst_expression = as.vector(vst_matrix),
+  stringsAsFactors = FALSE
+)
+plot_expr$symbol <- symbol_map$symbol[match(plot_expr$gene_id, symbol_map$gene_id)]
+plot_expr <- merge(plot_expr, sample_table, by = "sample_id")
+
+for (gene_symbol in genes_to_plot) {
+  gene_df <- plot_expr[plot_expr$symbol == gene_symbol, ]
+  if (nrow(gene_df) == 0) {
+    message("Skipping ", gene_symbol, ": not found in mapped gene symbols.")
+    next
+  }
+
+  p <- ggplot(gene_df, aes(x = condition, y = vst_expression, fill = condition)) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.6) +
+    geom_jitter(width = 0.15, size = 2) +
+    theme_minimal(base_size = 12) +
+    labs(
+      title = paste("Expression of", gene_symbol),
+      x = "Condition",
+      y = "VST expression"
+    ) +
+    theme(legend.position = "none")
+
+  print(p)
+  save_plot(p, paste0("Expression_boxplot_", gene_symbol, ".pdf"), width = 5, height = 5)
+}
+```
+
+# 13. Heatmaps
+
+```{r heatmap-top-variable}
+top_variable_n <- min(500, nrow(vst_matrix))
+top_variable <- head(order(matrixStats::rowVars(vst_matrix), decreasing = TRUE), top_variable_n)
+top_variable_mat <- vst_matrix[top_variable, ]
+top_variable_symbols <- map_gene_symbols(rownames(top_variable_mat))$symbol
+rownames(top_variable_mat) <- ifelse(
+  is.na(top_variable_symbols),
+  rownames(top_variable_mat),
+  top_variable_symbols
+)
+
+pdf(file.path(outdir, "plots", "Heatmap_top_variable_genes.pdf"), width = 9, height = 10)
+pheatmap(
+  top_variable_mat,
+  scale = "row",
+  annotation_col = annotation_col,
+  show_rownames = FALSE,
+  main = paste("Top", top_variable_n, "variable genes")
+)
+dev.off()
+```
+
+```{r heatmap-significant}
+if (length(all_sig_genes) >= 2) {
+  sig_mat <- vst_matrix[intersect(all_sig_genes, rownames(vst_matrix)), , drop = FALSE]
+  sig_symbols <- map_gene_symbols(rownames(sig_mat))$symbol
+  rownames(sig_mat) <- ifelse(is.na(sig_symbols), rownames(sig_mat), sig_symbols)
+
+  pdf(file.path(outdir, "plots", "Heatmap_significant_genes_union.pdf"), width = 9, height = 12)
+  pheatmap(
+    sig_mat,
+    scale = "row",
+    annotation_col = annotation_col,
+    show_rownames = nrow(sig_mat) <= 75,
+    main = "Union of significant genes"
+  )
+  dev.off()
+} else {
+  message("Skipping significant-gene heatmap: fewer than 2 significant genes.")
+}
+```
+
+# 14. Enrichment Analysis
+
+This section follows the downstream enrichment style from the previous analysis reference. It performs GO over-representation analysis and Hallmark GSEA for each contrast. KEGG GSEA is included as an optional block because KEGG availability can vary by organism and network access.
+
+```{r enrichment-helpers}
+make_entrez_list <- function(res_table, direction = c("up", "down", "all")) {
+  direction <- match.arg(direction)
+  df <- res_table[
+    !is.na(res_table$padj) &
+      res_table$padj < alpha &
+      abs(res_table$log2FoldChange) >= lfc_threshold,
+  ]
+  if (direction == "up") df <- df[df$log2FoldChange > 0, ]
+  if (direction == "down") df <- df[df$log2FoldChange < 0, ]
+  unique(na.omit(df$entrez))
+}
+
+make_ranked_list <- function(res_table) {
+  df <- res_table[!is.na(res_table$stat) & !is.na(res_table$entrez), ]
+  ranks <- df$stat
+  names(ranks) <- df$entrez
+  ranks <- sort(ranks, decreasing = TRUE)
+  ranks[!duplicated(names(ranks))]
+}
+
+plot_if_not_empty <- function(enrich_obj, title, filename) {
+  enrich_df <- as.data.frame(enrich_obj)
+  if (is.null(enrich_df) || nrow(enrich_df) == 0) {
+    message("No enrichment terms for ", title)
+    return(invisible(NULL))
+  }
+  p <- dotplot(enrich_obj, showCategory = 15, font.size = 8) + ggtitle(title)
+  print(p)
+  save_plot(p, filename, width = 10, height = 8)
+}
+```
+
+```{r go-ora}
+for (contrast_id in names(all_result_tables)) {
+  res_table <- all_result_tables[[contrast_id]]
+  universe_entrez <- unique(na.omit(res_table$entrez))
+
+  genes_all <- make_entrez_list(res_table, "all")
+  genes_up <- make_entrez_list(res_table, "up")
+  genes_down <- make_entrez_list(res_table, "down")
+
+  go_all <- enrichGO(
+    gene = genes_all,
+    universe = universe_entrez,
+    OrgDb = OrgDb,
+    keyType = "ENTREZID",
+    ont = "BP",
+    pAdjustMethod = "BH",
+    readable = TRUE
+  )
+  go_up <- enrichGO(
+    gene = genes_up,
+    universe = universe_entrez,
+    OrgDb = OrgDb,
+    keyType = "ENTREZID",
+    ont = "BP",
+    pAdjustMethod = "BH",
+    readable = TRUE
+  )
+  go_down <- enrichGO(
+    gene = genes_down,
+    universe = universe_entrez,
+    OrgDb = OrgDb,
+    keyType = "ENTREZID",
+    ont = "BP",
+    pAdjustMethod = "BH",
+    readable = TRUE
+  )
+
+  write.csv(as.data.frame(go_all), file.path(outdir, "tables", paste0("GO_BP_", contrast_id, "_all.csv")), row.names = FALSE)
+  write.csv(as.data.frame(go_up), file.path(outdir, "tables", paste0("GO_BP_", contrast_id, "_up.csv")), row.names = FALSE)
+  write.csv(as.data.frame(go_down), file.path(outdir, "tables", paste0("GO_BP_", contrast_id, "_down.csv")), row.names = FALSE)
+
+  plot_if_not_empty(go_all, paste("GO BP:", contrast_id, "all DE genes"), paste0("GO_BP_", contrast_id, "_all.pdf"))
+  plot_if_not_empty(go_up, paste("GO BP:", contrast_id, "upregulated genes"), paste0("GO_BP_", contrast_id, "_up.pdf"))
+  plot_if_not_empty(go_down, paste("GO BP:", contrast_id, "downregulated genes"), paste0("GO_BP_", contrast_id, "_down.pdf"))
+}
+```
+
+```{r hallmark-gsea}
+hallmark <- msigdbr(species = msig_species, category = "H")
+hallmark_t2g <- unique(hallmark[, c("gs_name", "entrez_gene")])
+
+for (contrast_id in names(all_result_tables)) {
+  ranked_list <- make_ranked_list(all_result_tables[[contrast_id]])
+
+  if (length(ranked_list) < 20) {
+    message("Skipping Hallmark GSEA for ", contrast_id, ": ranked list is too short.")
+    next
+  }
+
+  gsea_hallmark <- GSEA(
+    ranked_list,
+    TERM2GENE = hallmark_t2g,
+    pvalueCutoff = 0.05,
+    pAdjustMethod = "BH",
+    minGSSize = 15,
+    maxGSSize = 500,
+    verbose = FALSE
+  )
+
+  gsea_df <- as.data.frame(gsea_hallmark)
+  write.csv(gsea_df, file.path(outdir, "tables", paste0("GSEA_Hallmark_", contrast_id, ".csv")), row.names = FALSE)
+
+  if (nrow(gsea_df) > 0) {
+    gsea_hallmark@result$Description <- gsub("HALLMARK_", "", gsea_hallmark@result$Description)
+    gsea_hallmark@result$Description <- gsub("_", " ", gsea_hallmark@result$Description)
+    p <- dotplot(gsea_hallmark, showCategory = 15, split = ".sign", font.size = 8) +
+      facet_grid(. ~ .sign) +
+      ggtitle(paste("Hallmark GSEA:", contrast_id))
+    print(p)
+    save_plot(p, paste0("GSEA_Hallmark_", contrast_id, "_dotplot.pdf"), width = 12, height = 8)
+  }
+}
+```
+
+```{r optional-kegg-gsea, eval=FALSE}
+# Optional: enable this chunk when KEGG access and organism settings are validated.
+for (contrast_id in names(all_result_tables)) {
+  ranked_list <- make_ranked_list(all_result_tables[[contrast_id]])
+  gsea_kegg <- gseKEGG(
+    geneList = ranked_list,
+    organism = kegg_organism,
+    pvalueCutoff = 0.05,
+    pAdjustMethod = "BH",
+    minGSSize = 15,
+    maxGSSize = 500,
+    verbose = FALSE
+  )
+  write.csv(as.data.frame(gsea_kegg), file.path(outdir, "tables", paste0("GSEA_KEGG_", contrast_id, ".csv")), row.names = FALSE)
+}
+```
+
+# 15. Save Session Information
+
+```{r session-info}
+writeLines(capture.output(sessionInfo()), file.path(outdir, "sessionInfo.txt"))
+sessionInfo()
+```
