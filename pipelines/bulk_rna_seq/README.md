@@ -31,6 +31,15 @@ This README first explains the workflow step by step, then summarizes how the pr
 | Mouse TE-expression analysis | STAR alignment to mm10, TElocal with mm10-compatible gene and TE annotations, then DESeq2 |
 | Human TE-expression analysis | Planned future standard; current files are useful references but not yet a complete hg38 TE standard |
 
+## Gene Expression vs TE Expression
+
+| Workflow | Standard path | When to use |
+| --- | --- | --- |
+| Gene-level expression | FASTQ -> Salmon quantification -> tximport/DESeq2 R Markdown | Routine bulk RNA-seq differential gene expression |
+| TE expression | FASTQ -> STAR BAM alignment -> TElocal -> TE downstream analysis | Transposable-element expression projects that require genome-aligned BAM files |
+
+Salmon remains the standard for regular gene-level bulk RNA-seq. STAR is used when the analysis needs aligned BAM files, especially TE-expression analysis.
+
 ## Dependencies
 
 | Tool | Purpose |
@@ -344,6 +353,47 @@ High-level TE workflow:
 4. Run TElocal with matching gene GTF and TE annotation.
 5. Load `.cntTable` files into R.
 6. Run DESeq2 and TE-focused QC/plots.
+
+## How This Repository Summarizes the Workflow
+
+The detailed workflow above is summarized into small, editable shell scripts plus one downstream R Markdown template. These are lab templates, not a full workflow manager.
+
+### Gene-Level Expression Scripts
+
+Use one of these scripts to produce Salmon output folders with one `quant.sf` file per sample:
+
+- `scripts/gene_expression/01_salmon_quant_human_hg38.sh`
+- `scripts/gene_expression/01_salmon_quant_mouse_mm10.sh`
+
+Before running, edit the variables near the top of the script:
+
+- FASTQ input directory
+- Salmon output directory
+- Salmon index path
+- Read suffix pattern, such as `_1.fastq.gz` and `_2.fastq.gz`
+- Number of threads
+- Salmon library type
+
+After Salmon finishes, use:
+
+- `scripts/gene_expression/02_collect_salmon_quant.sh`
+
+This checks that Salmon output folders contain `quant.sf` and creates simple metadata helper files for downstream R analysis. It does not run DESeq2.
+
+Then run:
+
+- `rmarkdown/bulk_rna_seq_salmon_deseq2_standard.Rmd`
+
+The R Markdown template imports Salmon `quant.sf` files with `tximport`, creates the DESeq2 object, runs differential expression, and generates QC plots, heatmaps, volcano plots, gene expression boxplots, and enrichment outputs.
+
+### TE-Expression Scripts
+
+For mouse/mm10 TE-expression analysis, use:
+
+- `scripts/te_expression/01_star_align_for_telocal_mouse_mm10.sh`
+- `scripts/te_expression/02_telocal_mouse_mm10.sh`
+
+The STAR script creates sorted BAM files because TElocal requires aligned reads. The TElocal script uses mouse/mm10 gene and TE annotation placeholders and produces TE count tables. Human/hg38 TE scripts will be added later.
 
 ## Reference Genome And Annotation Choices
 

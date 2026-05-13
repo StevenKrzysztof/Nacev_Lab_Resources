@@ -30,6 +30,25 @@ Salmon is preferred because it is fast, reproducible, and designed for transcrip
 | QC visualization | Review samples and expression structure | Transformed counts, metadata | PCA and heatmaps |
 | Enrichment | Interpret gene lists and rankings | DE results, gene sets | GO/KEGG/Hallmark/GSEA outputs |
 
+## Executable Templates
+
+| Script | Use |
+| --- | --- |
+| `scripts/gene_expression/01_salmon_quant_human_hg38.sh` | Human hg38 Salmon quantification |
+| `scripts/gene_expression/01_salmon_quant_mouse_mm10.sh` | Mouse mm10 Salmon quantification |
+| `scripts/gene_expression/02_collect_salmon_quant.sh` | Check `quant.sf` files and create metadata helpers |
+| `rmarkdown/bulk_rna_seq_salmon_deseq2_standard.Rmd` | Import Salmon output with tximport and run DESeq2 downstream analysis |
+
+The shell scripts stop after Salmon quantification and collection. DESeq2, plots, and enrichment belong in the R Markdown template so the statistical analysis remains inspectable and reproducible.
+
+## Script Inputs And Outputs
+
+| Step | Inputs | Outputs |
+| --- | --- | --- |
+| Salmon quantification | Paired FASTQs, Salmon index, read suffix pattern | One output folder per sample with `quant.sf` |
+| Salmon collection | Salmon output folder | `salmon_quant_files.tsv` and editable sample metadata template |
+| R Markdown analysis | `quant.sf` files, metadata, GTF | DESeq2 tables, QC plots, heatmaps, volcano plots, enrichment outputs |
+
 ## What To Generalize From Previous Projects
 
 - Replace hardcoded sample vectors with a sample metadata table.
