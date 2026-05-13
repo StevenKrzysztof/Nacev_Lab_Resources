@@ -8,20 +8,6 @@ The lab standard for regular gene-level bulk RNA-seq is Salmon-based quantificat
 
 This README first explains the workflow step by step, then summarizes how the previous project files should inform the standardized repository structure. The examples below use fake teaching sample names only.
 
-## Reference File Audit
-
-| Reference file | Use in lab standard | Keep | Generalize |
-| --- | --- | --- | --- |
-| `salmon_alignment.sh` | Mouse Salmon quantification reference | Cutadapt, FastQC, Salmon paired-end quantification | Hardcoded input/output paths, sample prefix patterns, email, conda environment, GRCm38 naming; use mm10 as current mouse standard |
-| `align_batch1.sh` | Human Salmon quantification reference | Salmon quantification pattern for human data | Hardcoded project paths, sample folders, thread counts, batch-specific output layout; use hg38 as current human standard |
-| `tumor_group.Rmd` | Main gene-level Salmon import reference | `tximport` loading of Salmon `quant.sf`, `tx2gene`, DESeq2 from imported Salmon counts | Project-specific sample names, paths, design variables, contrasts, titles, and mouse package choices |
-| `Andrew_tumor_STAR_version.Rmd` | Downstream analysis style reference after count matrix exists | DESeq2 structure, filtering logic, PCA, heatmaps, result exports, GO/KEGG/Hallmark enrichment sections | STAR/featureCounts input should not replace Salmon for regular gene-level RNA-seq |
-| `STAR_align_mouse.sh` | Mouse STAR and TElocal reference | STAR sorted BAM generation and paired TElocal execution | Dataset paths, sample prefix, mm10 paths, integrated project layout |
-| `align_TE_batch1.sh` | Human STAR alignment reference for TE-style workflows | STAR sorted BAM logic and high multimapping allowance | Dataset paths, sample names, use of pre-trimmed FASTQs, human TE standard is not finalized yet |
-| `TElocal_batch1.sh` | Human TElocal-style reference | TElocal command shape and required GTF/TE annotation inputs | Hardcoded sample list, paths, and project-specific TE annotations; human/hg38 standard will be added later |
-| `TE_tumor_group.Rmd` | TE-expression downstream reference | Loading `.cntTable` files, filtering TE rows, DESeq2, TE class summaries, PCA, heatmaps | Project-specific samples, contrasts, and mouse-focused assumptions |
-| `change_name_salmon1.sh` | Salmon output housekeeping reference | Awareness that `quant.sf` files must be mapped cleanly to sample IDs | Renaming `quant.sf` is optional; prefer a sample sheet that points to each output directory |
-
 ## Standard Workflow Summary
 
 | Analysis type | Current lab standard |
