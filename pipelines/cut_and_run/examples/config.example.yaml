@@ -1,14 +1,95 @@
-project_name: example_cut_and_run_project
-genome: hg38
+project:
+  project_id: cut_and_run_project
+  project_dir: /path/to/project
+  output_dir: /path/to/project/results/cut_and_run
+  tmp_dir: /path/to/project/tmp
 
-paths:
-  raw_fastq_dir: /path/to/raw_fastq
-  output_dir: /path/to/output
-  reference_index: /path/to/bowtie2/index
-  chrom_sizes: /path/to/chrom.sizes
-  blacklist_bed: /path/to/blacklist.bed
+inputs:
+  sample_sheet: /path/to/project/metadata/sample_sheet.csv
 
-parameters:
+reference:
+  organism: organism_placeholder
+  genome_build: genome_build_placeholder
+  bowtie2_index: /path/to/reference/genome/bowtie2_index/genome
+  spikein_bowtie2_index: /path/to/reference/spikein/bowtie2_index/genome
+  chromosome_sizes: /path/to/reference/genome.chrom.sizes
+  blacklist_bed: /path/to/reference/blacklist.bed
+  canonical_chromosomes:
+    - chr1
+    - chr2
+    - chr3
+    - chr4
+    - chr5
+    - chr6
+    - chr7
+    - chr8
+    - chr9
+    - chr10
+    - chr11
+    - chr12
+    - chr13
+    - chr14
+    - chr15
+    - chr16
+    - chr17
+    - chr18
+    - chr19
+    - chr20
+    - chr21
+    - chr22
+    - chrX
+    - chrY
+
+software:
+  seacr_script: /path/to/software/SEACR_1.3.sh
+
+resources:
   threads: 8
-  paired_end: true
-  peak_caller: macs3
+  memory: 32G
+
+trimming:
+  enabled: true
+  trim_first_bp: 3
+  min_length: 20
+  adapter_sequence: AGATCGGAAGAG
+  trim_poly_a: true
+  trim_poly_g: true
+
+alignment:
+  bowtie2_mode: "--local --very-sensitive-local"
+  min_insert_size: 10
+  max_insert_size: 700
+  allow_dovetail: true
+  require_proper_pair: true
+  minimum_mapping_quality: 30
+  remove_duplicates: true
+  remove_blacklist_regions: true
+  cleanup_intermediate_files: true
+
+spikein:
+  enabled: true
+  scale_to_reads: 100000
+
+tracks:
+  make_spikein_tracks: true
+  make_cpm_tracks: true
+  cpm_bin_size: 10
+  extend_reads: true
+
+peak_calling:
+  run_seacr: true
+  run_macs3: true
+  seacr_norm_mode: non
+  seacr_threshold_modes:
+    - stringent
+    - relaxed
+  seacr_track_source: spikein
+  macs3_genome_size: hs
+  macs3_q_value: 0.05
+  macs3_broad_cutoff: 0.1
+  macs3_shift: -75
+  macs3_extsize: 150
+  frip_min_overlap_fraction: 0.20
+
+notes:
+  data_policy: Do not store raw data, private identifiers, or project-specific results in this template repository.
