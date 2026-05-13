@@ -26,6 +26,23 @@ TE-expression analysis is different from regular gene-level RNA-seq because it r
 | DESeq2 | Test TE-expression contrasts | TE count matrix, metadata | Differential TE tables |
 | TE summaries | Interpret TE classes and patterns | DESeq2 results | TE class plots, PCA, heatmaps |
 
+## Executable Templates
+
+| Script | Use |
+| --- | --- |
+| `scripts/te_expression/01_star_align_for_telocal_mouse_mm10.sh` | Align paired-end FASTQs to mm10 with STAR and produce sorted BAM files |
+| `scripts/te_expression/02_telocal_mouse_mm10.sh` | Run TElocal on STAR BAM files with mm10-compatible gene and TE annotations |
+
+STAR is used in this workflow because TElocal requires BAM input. This is different from routine gene-level RNA-seq, where Salmon is the standard.
+
+## Script Inputs And Outputs
+
+| Step | Inputs | Outputs |
+| --- | --- | --- |
+| STAR alignment | Paired FASTQs, mm10 STAR index | Sorted coordinate BAM files and STAR logs |
+| TElocal | STAR BAM files, mm10 gene GTF, mm10 TE annotation | Per-sample `.cntTable` files |
+| Downstream TE analysis | `.cntTable` files and sample metadata | TE count matrix, DESeq2 results, TE QC plots |
+
 ## Required Reference Consistency
 
 All TE inputs must use the same genome build:
