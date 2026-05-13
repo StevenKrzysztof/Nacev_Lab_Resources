@@ -41,8 +41,19 @@ Main steps preserved from `peak_call.sh`:
 1. Use the sample sheet to map each target sample to its `control_sample_id`.
 2. Run SEACR stringent and relaxed peak calling on bedGraph tracks when enabled.
 3. Run MACS3 in narrow or broad mode based on `peak_type`.
-4. Count peaks and write summary tables.
-5. Calculate FRiP using filtered BAMs and called peaks.
+4. Optionally run SICER2 broad-domain peak calling from filtered BAMs and matched controls.
+5. Count peaks and write summary tables.
+6. Calculate FRiP using filtered BAMs and called peaks.
+
+Peak callers are complementary:
+
+| Caller | Input | Best use |
+| --- | --- | --- |
+| SEACR | bedGraph tracks | CUT&RUN/CUT&Tag-oriented peak calling |
+| MACS3 | BAM files | General narrow or broad peak calling |
+| SICER2 | BAM files | Broad-domain calling for diffuse histone marks such as H3K27me3, H3K9me3, H3K36me3, sometimes H3K4me1, and sometimes H3K27ac |
+
+When feasible, run all available callers, inspect signal and peaks in IGV, then choose one consistent caller per mark for downstream comparisons.
 
 ## Major Generalizations From The Original Scripts
 
@@ -55,4 +66,5 @@ Main steps preserved from `peak_call.sh`:
 | One lab/user output path hardcoded | Outputs are under `project.output_dir` |
 | Separate normalized and non-normalized scripts | One track script handles spike-in and CPM modes |
 | Fixed mark list determines MACS3 mode | `peak_type` is project metadata |
+| hg19/Epicypher-specific SICER settings | SICER2 settings are configurable placeholders such as `sicer2_genome`, window size, gap size, fragment size, effective genome fraction, and FDR |
 | SLURM email and partition hardcoded | Cluster submission is left to project-specific wrappers |
