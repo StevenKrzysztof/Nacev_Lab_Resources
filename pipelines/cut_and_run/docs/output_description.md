@@ -21,6 +21,9 @@ Output paths are controlled by `project.output_dir` in `config.yaml`.
     macs3/
       narrow/
       broad/
+    sicer2/
+  logs/
+    sicer2/
   summaries/
 ```
 
@@ -56,13 +59,17 @@ Output paths are controlled by `project.output_dir` in `config.yaml`.
 | `peaks/seacr/relaxed/sample_id.relaxed.bed` | Relaxed SEACR peaks |
 | `peaks/macs3/narrow/sample_id_peaks.narrowPeak` | MACS3 narrow peaks |
 | `peaks/macs3/broad/sample_id_peaks.broadPeak` | MACS3 broad peaks |
+| `peaks/sicer2/sample_id/*-island.bed` | SICER2 broad-domain peak calls |
+| `logs/sicer2/sample_id.sicer2.log` | SICER2 per-sample log |
 | `summaries/seacr_peak_summary.tsv` | SEACR peak counts |
 | `summaries/macs3_peak_summary.tsv` | MACS3 peak counts |
+| `summaries/sicer2_peak_summary.tsv` | SICER2 broad-domain peak counts |
 | `summaries/frip_summary.tsv` | Reads-in-peaks and FRiP metrics |
 
 ## Interpretation Notes
 
 - BigWig tracks are for visual inspection and comparison in a genome browser.
-- SEACR and MACS3 peak sets may differ because they use different models and input formats.
+- SEACR, MACS3, and SICER2 peak sets may differ because they use different models and input formats.
+- SICER2 outputs should be kept separate from SEACR and MACS3 outputs so downstream comparisons do not mix caller assumptions.
 - FRiP values should be interpreted with target biology, signal breadth, sequencing depth, and control quality in mind.
 - Broad histone marks often require different expectations than narrow transcription factor or active enhancer marks.

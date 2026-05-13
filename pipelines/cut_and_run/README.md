@@ -27,6 +27,7 @@ The example names and paths below are fake. Do not use real private sample names
 | bedGraphToBigWig | Converts bedGraph files to BigWig format for genome browsers |
 | SEACR | Calls Cut&Run/CUT&Tag peaks from bedGraph signal tracks |
 | MACS3 | Calls narrow or broad peaks from BAM files |
+| SICER2 | Calls broad enriched domains, especially for diffuse histone marks |
 | yq | Reads values from YAML config files used by the helper scripts |
 | R | Sometimes needed by SEACR or downstream plotting and annotation steps |
 
@@ -366,6 +367,7 @@ Samples should only be compared quantitatively when the normalization strategy i
 
 - SEACR peak BED files
 - MACS3 narrowPeak or broadPeak files
+- SICER2 broad-domain BED files
 - Peak summary table
 
 **Important parameters:**
@@ -373,8 +375,15 @@ Samples should only be compared quantitatively when the normalization strategy i
 - SEACR stringent versus relaxed
 - SEACR `norm` versus `non`
 - MACS3 narrow versus broad
+- SICER2 genome build, window size, gap size, fragment size, effective genome fraction, and FDR threshold
 - q-value or p-value cutoff
 - Matched IgG/control choice
+
+Peak callers should be treated as complementary:
+
+- **SEACR:** CUT&RUN/CUT&Tag-oriented peak calling from bedGraph tracks.
+- **MACS3:** General narrow/broad peak calling from BAM files.
+- **SICER2:** Broad-domain peak calling, especially for diffuse histone marks such as H3K27me3, H3K9me3, H3K36me3, sometimes H3K4me1, and sometimes H3K27ac depending on project and assay behavior.
 
 **Example SEACR command:**
 
@@ -399,7 +408,48 @@ macs3 callpeak \
   -q 0.05
 ```
 
-SEACR is commonly used for sparse CUT&RUN and chromatin-profiling data and expects bedGraph input. MACS3 can be used as an additional or alternative peak caller depending on the target and signal pattern. Narrow marks or transcription factors often use narrow peak calling; broad histone marks often use broad peak calling.
+**Example SICER2 command:**
+
+```bash
+SICER2 \
+  -t bam/sample1_H3K27me3.final.bam \
+  -c bam/sample1_IgG.final.bam \
+  -s hg38 \
+  -w 200 \
+  -g 600 \
+  -f 150 \
+  -egf 0.74 \
+  -fdr 0.05 \
+  -o peaks/sicer2/sample1_H3K27me3
+```
+
+SICER2 command-line flags can differ by installation. Check `SICER2 --help` or the local command documentation before running a project. Use the genome label and effective genome value that match the BAM genome build.
+
+SEACR is commonly used for sparse CUT&RUN and chromatin-profiling data and expects bedGraph input. MACS3 can be used as an additional or alternative peak caller depending on the target and signal pattern. SICER2 is useful for broad domains where signal appears diffuse across larger genomic regions.
+
+### Epicypher Reference Peak-Caller Choice
+
+This section is a reference based on Epicypher-style output naming, not an absolute rule. In the reference output style, narrow marks appear to use MACS2/MACS3-style narrow peak calling, while broad marks appear to use SICER2-style broad-domain calling.
+
+| Mark | Epicypher-style reference classification | Example output type |
+| --- | --- | --- |
+| CTCF | Narrow | `.narrowPeak` |
+| H3K4me3 | Narrow | `.narrowPeak` |
+| H3K27me3 | Broad | `broad-W5000-G50000-FDR0.01-island.bed` |
+| H3K36me3 | Broad | `broad-W5000-G50000-FDR0.01-island.bed` |
+| H3K27ac | Broad in this reference set | `broad-W5000-G50000-FDR0.01-island.bed` |
+| H3K4me1 | Mixed / project-dependent | Both `.narrowPeak` and broad-domain outputs appear |
+| H3K9me3 | Mixed / project-dependent | Both `.narrowPeak` and broad-domain outputs appear |
+
+Lab-standard interpretation:
+
+- Use the Epicypher classification as a starting reference only.
+- When feasible, run all three available methods: SEACR, MACS3, and SICER2.
+- After peak calling, compare signal tracks and peak calls in IGV.
+- Choose the best peak-calling result based on signal pattern, mark biology, control/background behavior, and replicate consistency.
+- Once a peak caller is chosen for a mark in a project, keep the same caller for that mark across all samples in that project.
+- Do not mix peak callers within the same mark for downstream comparisons such as overlap analysis, DiffBind-style analysis, gained/lost peak analysis, or annotation.
+- Document the final selected peak caller for each mark in the project report.
 
 ### Step 11. QC summary and FRiP
 
@@ -478,6 +528,7 @@ This script performs:
 
 - SEACR peak calling
 - MACS3 peak calling
+- Optional SICER2 broad-domain peak calling
 - Matched IgG/control handling
 - Peak summaries
 - FRiP calculation
@@ -487,6 +538,8 @@ Users need to edit or check:
 - Target-control matching
 - SEACR path
 - MACS3 peak type
+- SICER2 executable name and genome setting
+- SICER2 window size, gap size, fragment size, effective genome fraction, and FDR threshold
 - q-value cutoff
 - Genome size option
 - Peak output directory
@@ -514,6 +567,7 @@ Never mix hg38 BAMs with hg19 annotation, or mm10 BAMs with mm39 annotation.
 | bedGraph files | Coverage tracks often used as SEACR input |
 | SEACR peak BED files | Peak calls from bedGraph signal |
 | MACS3 narrowPeak/broadPeak files | Peak calls from BAM alignments |
+| SICER2 broad-domain BED files | Broad-domain peak calls kept separately from SEACR and MACS3 outputs |
 | Peak summary tables | Counts and settings for peak-calling outputs |
 | FRiP summaries | Fraction of reads in peaks and supporting counts |
 | FastQC/MultiQC reports | Sequencing and workflow QC summaries |

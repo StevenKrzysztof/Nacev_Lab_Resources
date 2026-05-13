@@ -12,7 +12,12 @@
 | BigWig conversion fails | Chromosome names differ between bedGraph and chrom sizes | Compare BAM contigs with `reference.chromosome_sizes` |
 | SEACR cannot find control track | Missing `control_sample_id` or track source mismatch | Confirm control sample and `peak_calling.seacr_track_source` |
 | MACS3 output is missing | Missing BAM, wrong `peak_type`, or MACS3 failure | Read the per-sample MACS3 log |
-| FRiP is very low | Weak enrichment, poor control, broad diffuse signal, or wrong peak set | Review tracks manually and compare SEACR/MACS3 calls |
+| SICER2 not found in PATH | Command name or environment mismatch | Check `peak_calling.sicer2_bin`, try `SICER2 --help`, and confirm the software environment |
+| SICER2 genome build not recognized | Installed SICER2 does not know the configured genome label | Check `peak_calling.sicer2_genome` and local SICER2 documentation |
+| SICER2 reports too many or too few broad peaks | Window size, gap size, fragment size, effective genome fraction, or FDR may be inappropriate | Review SICER2 parameters and inspect tracks in IGV |
+| SICER2 broad peaks look shifted or inconsistent | BAM genome build or chromosome naming does not match SICER2 settings | Confirm BAM build, chromosome names, and SICER2 genome setting |
+| Inconsistent peak caller use across samples | Different callers were selected for the same mark | Choose one caller per mark after IGV review and use it consistently |
+| FRiP is very low | Weak enrichment, poor control, broad diffuse signal, or wrong peak set | Review tracks manually and compare SEACR, MACS3, and SICER2 calls |
 
 ## Debugging Checklist
 
@@ -21,6 +26,8 @@
 - [ ] Confirm no sample ID contains spaces or commas.
 - [ ] Confirm `control_sample_id` matches another `sample_id` exactly.
 - [ ] Confirm `peak_type` is `narrow` or `broad`.
+- [ ] If SICER2 is enabled, confirm final BAMs and matched control BAMs exist.
+- [ ] If SICER2 is enabled, confirm genome build, effective genome fraction, window size, gap size, fragment size, and FDR are documented.
 - [ ] Confirm chromosome naming is consistent, for example `chr1` versus `1`.
 - [ ] Confirm the active software environment contains all required tools.
 
