@@ -1,3 +1,9 @@
-sample_id,condition,mark,replicate,fastq_r1,fastq_r2
-WT_H3K4me3_rep1,WT,H3K4me3,1,/path/to/WT_H3K4me3_rep1_R1.fastq.gz,/path/to/WT_H3K4me3_rep1_R2.fastq.gz
-KO_H3K4me3_rep1,KO,H3K4me3,1,/path/to/KO_H3K4me3_rep1_R1.fastq.gz,/path/to/KO_H3K4me3_rep1_R2.fastq.gz
+sample_id,condition,target,replicate,fastq_r1,fastq_r2,control_sample_id,normalization_group,peak_type,include_spikein
+sample_001,condition_a,target_of_interest,replicate_1,/path/to/project/raw_data/sample_001_R1.fastq.gz,/path/to/project/raw_data/sample_001_R2.fastq.gz,control_001,target_of_interest,narrow,true
+sample_002,condition_a,target_of_interest,replicate_2,/path/to/project/raw_data/sample_002_R1.fastq.gz,/path/to/project/raw_data/sample_002_R2.fastq.gz,control_002,target_of_interest,narrow,true
+sample_003,condition_b,target_of_interest,replicate_1,/path/to/project/raw_data/sample_003_R1.fastq.gz,/path/to/project/raw_data/sample_003_R2.fastq.gz,control_003,target_of_interest,narrow,true
+sample_004,condition_b,target_of_interest,replicate_2,/path/to/project/raw_data/sample_004_R1.fastq.gz,/path/to/project/raw_data/sample_004_R2.fastq.gz,control_004,target_of_interest,narrow,true
+control_001,condition_a,control_target,replicate_1,/path/to/project/raw_data/control_001_R1.fastq.gz,/path/to/project/raw_data/control_001_R2.fastq.gz,,control_target,narrow,true
+control_002,condition_a,control_target,replicate_2,/path/to/project/raw_data/control_002_R1.fastq.gz,/path/to/project/raw_data/control_002_R2.fastq.gz,,control_target,narrow,true
+control_003,condition_b,control_target,replicate_1,/path/to/project/raw_data/control_003_R1.fastq.gz,/path/to/project/raw_data/control_003_R2.fastq.gz,,control_target,narrow,true
+control_004,condition_b,control_target,replicate_2,/path/to/project/raw_data/control_004_R1.fastq.gz,/path/to/project/raw_data/control_004_R2.fastq.gz,,control_target,narrow,true
